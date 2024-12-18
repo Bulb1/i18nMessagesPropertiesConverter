@@ -5,17 +5,20 @@ import os
 from datetime import datetime
 import json
 
+
 # Function to load custom dictionary from a JSON file
 def load_custom_dict(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             custom_dict = json.load(file)
+        print(f"Loaded dictionary from {file_path}")  # Debug line
         return custom_dict
     except Exception as e:
         messagebox.showerror("Error", f"Could not load custom dictionary: {e}")
         return {}
 
-def translate_values(input_data, src_lang, dest_lang, custom_dict=None, is_file_input=True):
+
+def translate_values(input_data, src_lang, dest_lang, custom_dict, is_file_input=True):
     translator = Translator()
     try:
         if is_file_input:
@@ -34,22 +37,65 @@ def translate_values(input_data, src_lang, dest_lang, custom_dict=None, is_file_
         output_file = os.path.join(output_dir, output_filename)
 
         with open(output_file, 'w', encoding='utf-8') as outfile:
-            for line in lines:
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    if src_lang == 'en' and value.strip() in custom_dict:
+            for line_number, line in enumerate(lines, start=1):
+                if '=' not in line:
+                    raise ValueError(
+                        f"Error on line {line_number}: Missing '=' in line '{line.strip()}'. Ensure every line has a key=value pair.")
+
+                key, value = line.split('=', 1)
+
+                # Check for missing or empty values
+                if not value.strip():
+                    raise ValueError(
+                        f"Error on line {line_number}: The value for key '{key.strip()}' is empty. Please provide a value.")
+
+                print(f"Translating: {value.strip()}")  # Debugging
+
+                translated_value = None
+
+                # Perform dictionary lookup based on source language
+                if src_lang == 'pl':  # PL → EN
+                    if value.strip() in custom_dict:
                         translated_value = custom_dict[value.strip()]
-                    elif src_lang == 'pl' and key.strip() in custom_dict:
-                        translated_value = custom_dict[key.strip()]
+                        print(f"Custom Dictionary Match (PL to EN): {translated_value}")
                     else:
+                        # Case-insensitive match
+                        for dict_key, dict_value in custom_dict.items():
+                            if value.strip().lower() == dict_key.lower():
+                                translated_value = dict_value
+                                print(f"Case-Insensitive Match (PL to EN): {translated_value}")
+                                break
+                elif src_lang == 'en':  # EN → PL
+                    # Find the key in the dictionary that matches the value being translated
+                    for dict_key, dict_value in custom_dict.items():
+                        if value.strip() == dict_key:  # Exact match
+                            translated_value = dict_value
+                            print(f"Custom Dictionary Match (EN to PL): {translated_value}")
+                            break
+                        elif value.strip().lower() == dict_key.lower():  # Case-insensitive
+                            translated_value = dict_value
+                            print(f"Case-Insensitive Match (EN to PL): {translated_value}")
+                            break
+
+                # If no match found in the dictionary, fall back to Google Translate
+                if translated_value is None:
+                    print(f"Google Translate for: {value.strip()}")
+                    try:
                         translated_value = translator.translate(value.strip(), src=src_lang, dest=dest_lang).text
-                    outfile.write(f"{key}={translated_value}\n")
-                else:
-                    outfile.write(line)
+                        print(f"Google Translated: {translated_value}")
+                    except Exception as e:
+                        print(f"Error translating: {e}")
+                        translated_value = value.strip()  # Default to original value if translation fails
+
+                outfile.write(f"{key.strip()}={translated_value}\n")
+                print(f"Translation written: {key.strip()}={translated_value}")
 
         messagebox.showinfo("Success", f"Translation saved to {output_file}")
+    except ValueError as ve:
+        messagebox.showerror("Input Error", f"An error occurred: {ve}")
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
+
 
 def select_input_file():
     # Get the 'input' directory in the same location as the script
@@ -58,7 +104,8 @@ def select_input_file():
 
     # Check if the 'input' directory exists, otherwise show an error
     if not os.path.exists(input_dir):
-        messagebox.showerror("Error", "The 'input' directory does not exist. Please create it in the script's directory.")
+        messagebox.showerror("Error",
+                             "The 'input' directory does not exist. Please create it in the script's directory.")
         return
 
     # Open a file dialog starting at the 'input' directory
@@ -73,6 +120,7 @@ def select_input_file():
         input_entry.delete(0, tk.END)
         input_entry.insert(0, input_file)
 
+
 def toggle_input_mode():
     if file_input_var.get():
         input_text.grid_forget()
@@ -81,6 +129,7 @@ def toggle_input_mode():
     else:
         file_frame.grid_forget()
         input_text.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+
 
 def run_translation():
     if file_input_var.get():
@@ -97,10 +146,36 @@ def run_translation():
             return
         is_file_input = False
 
-    custom_dict = load_custom_dict("custom_dict.json")
     src_lang = src_lang_var.get()
     dest_lang = dest_lang_var.get()
+
+    # Load the correct dictionary based on the source language and direction
+    if src_lang == 'pl' and dest_lang == 'en':
+        custom_dict = load_custom_dict("custom_dict_en.json")  # Polish to English
+    elif src_lang == 'en' and dest_lang == 'pl':
+        custom_dict = load_custom_dict("custom_dict_pl.json")  # English to Polish
+    else:
+        custom_dict = {}
+
     translate_values(input_data, src_lang, dest_lang, custom_dict, is_file_input)
+
+
+# Function to automatically switch the destination language based on the source language
+def update_dest_lang(*args):
+    src_lang = src_lang_var.get()
+    if src_lang == 'pl':
+        dest_lang_var.set('en')
+    elif src_lang == 'en':
+        dest_lang_var.set('pl')
+
+
+def update_src_lang(*args):
+    dest_lang = dest_lang_var.get()
+    if dest_lang == 'pl':
+        src_lang_var.set('en')
+    elif dest_lang == 'en':
+        src_lang_var.set('pl')
+
 
 # Main application
 root = tk.Tk()
@@ -149,9 +224,11 @@ lang_frame = tk.Frame(root)
 lang_frame.grid(row=2, column=0, columnspan=2, pady=5)
 tk.Label(lang_frame, text="From:").grid(row=0, column=0, padx=5)
 src_lang_var = tk.StringVar(value="pl")
+src_lang_var.trace("w", update_dest_lang)  # Watch the source language variable for changes
 tk.OptionMenu(lang_frame, src_lang_var, "pl", "en").grid(row=0, column=1, padx=5)
 tk.Label(lang_frame, text="To:").grid(row=0, column=2, padx=5)
 dest_lang_var = tk.StringVar(value="en")
+dest_lang_var.trace("w", update_src_lang)  # Watch the destination language variable for changes
 tk.OptionMenu(lang_frame, dest_lang_var, "en", "pl").grid(row=0, column=3, padx=5)
 
 # Translate button
