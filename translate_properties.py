@@ -4,6 +4,9 @@ from googletrans import Translator
 import os
 from datetime import datetime
 import json
+import logging
+from time import sleep
+import random
 
 
 # Function to load custom dictionary from a JSON file
@@ -11,21 +14,35 @@ def load_custom_dict(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             custom_dict = json.load(file)
-        print(f"Loaded dictionary from {file_path}")  # Debug line
+        logging.info(f"Loaded dictionary from {file_path}")
         return custom_dict
     except Exception as e:
         messagebox.showerror("Error", f"Could not load custom dictionary: {e}")
         return {}
 
 
+def safe_translate(translator, value, src_lang, dest_lang, retries=3):
+    """Safe translation function with retries."""
+    for attempt in range(retries):
+        try:
+            return translator.translate(value, src=src_lang, dest=dest_lang).text
+        except Exception as e:
+            if attempt < retries - 1:
+                sleep(1)  # Wait before retrying
+            else:
+                logging.error(f"Translation failed for '{value}': {e}")
+                return value  # Fallback to original text
+
+
 def translate_values(input_data, src_lang, dest_lang, custom_dict, is_file_input=True):
     translator = Translator()
     try:
+        # Load the input data
         if is_file_input:
             with open(input_data, 'r', encoding='utf-8') as infile:
-                lines = infile.readlines()
+                lines = infile.readlines()  # Keep all lines, including newlines
         else:
-            lines = input_data.splitlines()
+            lines = input_data.splitlines(True)  # Keep all newlines
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         output_dir = os.path.join(script_dir, 'output')
@@ -33,62 +50,64 @@ def translate_values(input_data, src_lang, dest_lang, custom_dict, is_file_input
             os.makedirs(output_dir)
 
         current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_filename = f"{src_lang}_{dest_lang}_{current_date}.txt"
+        output_filename = f"{src_lang}_{dest_lang}_{current_date}_{random.randint(1000, 9999)}.txt"
         output_file = os.path.join(output_dir, output_filename)
 
+        seen_keys = set()
         with open(output_file, 'w', encoding='utf-8') as outfile:
             for line_number, line in enumerate(lines, start=1):
-                if '=' not in line:
-                    raise ValueError(
-                        f"Error on line {line_number}: Missing '=' in line '{line.strip()}'. Ensure every line has a key=value pair.")
-
-                key, value = line.split('=', 1)
-
-                # Check for missing or empty values
-                if not value.strip():
-                    raise ValueError(
-                        f"Error on line {line_number}: The value for key '{key.strip()}' is empty. Please provide a value.")
-
-                print(f"Translating: {value.strip()}")  # Debugging
-
-                translated_value = None
-
-                # Perform dictionary lookup based on source language
-                if src_lang == 'pl':  # PL → EN
-                    if value.strip() in custom_dict:
-                        translated_value = custom_dict[value.strip()]
-                        print(f"Custom Dictionary Match (PL to EN): {translated_value}")
-                    else:
-                        # Case-insensitive match
-                        for dict_key, dict_value in custom_dict.items():
-                            if value.strip().lower() == dict_key.lower():
-                                translated_value = dict_value
-                                print(f"Case-Insensitive Match (PL to EN): {translated_value}")
-                                break
-                elif src_lang == 'en':  # EN → PL
-                    # Find the key in the dictionary that matches the value being translated
-                    for dict_key, dict_value in custom_dict.items():
-                        if value.strip() == dict_key:  # Exact match
-                            translated_value = dict_value
-                            print(f"Custom Dictionary Match (EN to PL): {translated_value}")
-                            break
-                        elif value.strip().lower() == dict_key.lower():  # Case-insensitive
-                            translated_value = dict_value
-                            print(f"Case-Insensitive Match (EN to PL): {translated_value}")
-                            break
-
-                # If no match found in the dictionary, fall back to Google Translate
-                if translated_value is None:
-                    print(f"Google Translate for: {value.strip()}")
+                if line.strip():  # Skip completely empty lines (lines with just whitespace are kept)
                     try:
-                        translated_value = translator.translate(value.strip(), src=src_lang, dest=dest_lang).text
-                        print(f"Google Translated: {translated_value}")
-                    except Exception as e:
-                        print(f"Error translating: {e}")
-                        translated_value = value.strip()  # Default to original value if translation fails
+                        key, value = line.split('=', 1)
+                        if not value.strip():
+                            raise ValueError(f"Empty value for key '{key.strip()}' on line {line_number}.")
+                    except ValueError:
+                        raise ValueError(
+                            f"Error on line {line_number}: Invalid format '{line.strip()}'. Ensure it has 'key=value'.")
 
-                outfile.write(f"{key.strip()}={translated_value}\n")
-                print(f"Translation written: {key.strip()}={translated_value}")
+                    # Detect duplicate keys
+                    if key.strip() in seen_keys:
+                        raise ValueError(f"Duplicate key '{key.strip()}' found on line {line_number}.")
+                    seen_keys.add(key.strip())
+
+                    logging.info(f"Translating: {value.strip()}")
+
+                    translated_value = None
+
+                    # Perform dictionary lookup based on source language
+                    if src_lang == 'pl':  # PL → EN
+                        if value.strip() in custom_dict:
+                            translated_value = custom_dict[value.strip()]
+                            logging.info(f"Custom Dictionary Match (PL to EN): {translated_value}")
+                        else:
+                            # Case-insensitive match
+                            for dict_key, dict_value in custom_dict.items():
+                                if value.strip().lower() == dict_key.lower():
+                                    translated_value = dict_value
+                                    logging.info(f"Case-Insensitive Match (PL to EN): {translated_value}")
+                                    break
+                    elif src_lang == 'en':  # EN → PL
+                        # Find the key in the dictionary that matches the value being translated
+                        for dict_key, dict_value in custom_dict.items():
+                            if value.strip() == dict_key:  # Exact match
+                                translated_value = dict_value
+                                logging.info(f"Custom Dictionary Match (EN to PL): {translated_value}")
+                                break
+                            elif value.strip().lower() == dict_key.lower():  # Case-insensitive
+                                translated_value = dict_value
+                                logging.info(f"Case-Insensitive Match (EN to PL): {translated_value}")
+                                break
+
+                    # If no match found in the dictionary, fall back to Google Translate
+                    if translated_value is None:
+                        logging.info(f"Google Translate for: {value.strip()}")
+                        translated_value = safe_translate(translator, value.strip(), src_lang, dest_lang)
+
+                    outfile.write(f"{key.strip()}={translated_value}\n")
+                    logging.info(f"Translation written: {key.strip()}={translated_value}")
+                else:
+                    # Preserve newlines for empty lines (no action needed)
+                    outfile.write('\n')
 
         messagebox.showinfo("Success", f"Translation saved to {output_file}")
     except ValueError as ve:
@@ -98,19 +117,8 @@ def translate_values(input_data, src_lang, dest_lang, custom_dict, is_file_input
 
 
 def select_input_file():
-    # Get the 'input' directory in the same location as the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # Script's directory
-    input_dir = os.path.join(script_dir, 'input')  # Path to 'input' directory
-
-    # Check if the 'input' directory exists, otherwise show an error
-    if not os.path.exists(input_dir):
-        messagebox.showerror("Error",
-                             "The 'input' directory does not exist. Please create it in the script's directory.")
-        return
-
-    # Open a file dialog starting at the 'input' directory
+    # Allow user to paste the file path manually, no restrictions to the input directory
     input_file = filedialog.askopenfilename(
-        initialdir=input_dir,
         title="Select Input File",
         filetypes=[("Text Files", "*.txt")]
     )
@@ -134,8 +142,8 @@ def toggle_input_mode():
 def run_translation():
     if file_input_var.get():
         input_file = input_entry.get()
-        if not input_file:
-            messagebox.showwarning("Input Error", "Please select an input file.")
+        if not input_file or not os.path.isfile(input_file):  # Validate the file path
+            messagebox.showwarning("Input Error", "Please select a valid input file or paste a valid path.")
             return
         input_data = input_file
         is_file_input = True
@@ -209,7 +217,7 @@ tk.Checkbutton(root, text="Use File Input", variable=file_input_var, command=tog
 
 # File input frame
 file_frame = tk.Frame(root)
-tk.Label(file_frame, text="Select Input File:").grid(row=0, column=0, padx=5, pady=5)
+tk.Label(file_frame, text="Select Input File or Paste Path:").grid(row=0, column=0, padx=5, pady=5)
 input_entry = tk.Entry(file_frame)
 input_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
 file_frame.grid_columnconfigure(1, weight=1)
@@ -236,4 +244,8 @@ tk.Button(root, text="Translate", command=run_translation).grid(row=3, column=0,
 
 # Initial layout setup
 toggle_input_mode()
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 root.mainloop()
