@@ -2,10 +2,10 @@
 This is a simple app to make the process of creating messages.properties for pl/en easier
 
 # Prerequisites
-Python 3.11.2
-PyCharm (IDE)
-package:
-googletrans 4.0.0rc1
+Python 3.11.2 <br />
+PyCharm (IDE) <br />
+package: <br />
+googletrans 4.0.0rc1 
 
 # Cloning repository & Preparing to use the app
 ## Linux 
