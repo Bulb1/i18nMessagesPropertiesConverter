@@ -1,10 +1,10 @@
 # i18nMessagesPropertiesConverter
-This is a simple app to make the process of creating messages.properties for other languages easier
+This is a simple app to make the process of creating messages.properties for pl/en easier
 
 ## Functionality
 defaultly you can paste in your properties to translate
 ![defaultmode](https://github.com/user-attachments/assets/ca420c86-049b-4128-8187-c027478df997)
-but there's mode to use file from input directory
+but there's mode to use file from chosen directory
 ![othermode](https://github.com/user-attachments/assets/7131d1b2-a191-473f-b457-20bd8fe94cdb)
 
 ## Usage
