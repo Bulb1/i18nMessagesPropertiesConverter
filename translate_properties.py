@@ -120,7 +120,7 @@ def select_input_file():
     # Allow user to paste the file path manually, no restrictions to the input directory
     input_file = filedialog.askopenfilename(
         title="Select Input File",
-        filetypes=[("Text Files", "*.txt")]
+        filetypes=[("Text Files", "*.txt"), ("Properties Files", "*.properties"), ("All Files", "*.*")]
     )
 
     # If a file is selected, insert its path into the input entry field
