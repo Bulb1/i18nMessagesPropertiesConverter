@@ -1,0 +1,5 @@
+example.module.section.ui.View.description=Description example
+example.module.section.ui.View.title=Title example
+example.module.section.ui.View.username=Username
+example.module.section.ui.View.password=Password
+example.module.section.ui.View.loginButton=Login

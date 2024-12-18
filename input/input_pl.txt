@@ -1,0 +1,5 @@
+example.module.section.ui.View.description=Przykładowy opis
+example.module.section.ui.View.title=Przykładowy tytuł
+example.module.section.ui.View.username=Nazwa użytkownika
+example.module.section.ui.View.password=Hasło
+example.module.section.ui.View.loginButton=Zaloguj
